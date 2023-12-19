@@ -1,40 +1,8 @@
-exports.reply = function (r) {
-	if (this.bot == null) {
-		this.bot = new ElizaBot(false);
-	} 
-	return this.bot.transform(r);
-}
-
-exports.start = function () {
-	if (this.bot == null) {
-		this.bot = new ElizaBot(false);
-	}
-	return this.bot.getInitial();
-}
-
-exports.bye = function () {
-	if (this.bot == null) {
-		this.bot = new ElizaBot(false);
-	}
-	return this.bot.getFinal();
-}
-
-function ElizaBot(noRandomFlag) {
-
-	this.elizaInitials = [
-		"How do you do.  Please tell me your problem.",
-		"Please tell me what's been bothering you.",
-		"Is something troubling you ?",
-		"Im here. Talk to me.",
-		"Talk to me",
-		"Top of the morning to you.",
-		"Thanks for waking me up"
-	];
-
-	this.elizaKeywords = [
-
-	/*
-	  Array of
+//Eliza (https://en.wikipedia.org/wiki/ELIZA) was originally built by Joseph Weizenbaum in 1966
+//Retrieved from "Brandon Wong"'s github - https://github.com/brandongmwong/elizabot-js
+//Modded by iSlammedMyKindle for es6 and to have multiple memory-efficient instances at once
+const responses = {
+	/*Array of
 	  ["<key>", <rank>, [
 	    ["<decomp>", [
 	      "<reasmb>",
@@ -46,9 +14,9 @@ function ElizaBot(noRandomFlag) {
 	      "<reasmb>",
 	      "<reasmb>"
 	    ]]
-	  ]]
-	*/
-
+	  ]]*/
+	//This is initialized later; check where it says: initializeKeywordRegex(responses.keywords)
+	keywords: [
 		["xnone", 0, [
 		 ["*", [
 		     "I'm not sure I understand you fully.",
@@ -577,9 +545,28 @@ function ElizaBot(noRandomFlag) {
 		  ]]
 		]]
 
-	];
+	],
 
-	this.elizaPostTransforms = [
+	initials:[
+		"How do you do.  Please tell me your problem.",
+		"Please tell me what's been bothering you.",
+		"Is something troubling you ?",
+		"Im here. Talk to me.",
+		"Talk to me",
+		"Top of the morning to you.",
+		"Thanks for waking me up"
+	],
+
+	finals:[
+		"Goodbye.  It was nice talking to you.",
+		// additions (not original)
+		"Goodbye.  This was really a nice talk.",
+		"Goodbye.  I'm looking forward to our next session.",
+		"This was a good session, wasn't it -- but time is over now.   Goodbye.",
+		"Maybe we could discuss this moreover in our next session ?   Goodbye."
+	],
+	//Regex to modify eliza's responses
+	postTransforms:[
 		/ old old/g, " old",
 		/\bthey were( not)? me\b/g, "it was$1 me",
 		/\bthey are( not)? me\b/g, "it is$1 me",
@@ -587,26 +574,12 @@ function ElizaBot(noRandomFlag) {
 		/\bthat your( own)? (\w+)( now)? \?/, "that you have your$1 $2 ?",
 		/\bI to have (\w+)/, "I have $1",
 		/Earlier you said your( own)? (\w+)( now)?\./, "Earlier you talked about your $2."
-	];
+	]
+}
 
-	this.elizaFinals = [
-		"Goodbye.  It was nice talking to you.",
-		// additions (not original)
-		"Goodbye.  This was really a nice talk.",
-		"Goodbye.  I'm looking forward to our next session.",
-		"This was a good session, wasn't it -- but time is over now.   Goodbye.",
-		"Maybe we could discuss this moreover in our next session ?   Goodbye."
-	];
-
-	this.elizaQuits = [
-		"bye",
-		"goodbye",
-		"done",
-		"exit",
-		"quit"
-	];
-
-	this.elizaPres = [
+const wordNuances = {
+	//...I wonder what "pres means"?
+	pres:[
 		"dont", "don't",
 		"cant", "can't",
 		"wont", "won't",
@@ -625,9 +598,8 @@ function ElizaBot(noRandomFlag) {
 		"same", "alike",
 		"identical", "alike",
 		"equivalent", "alike"
-	];
-
-	this.elizaPosts = [
+	],
+	posts:[
 		"am", "are",
 		"your", "my",
 		"me", "you",
@@ -637,9 +609,8 @@ function ElizaBot(noRandomFlag) {
 		"you", "I",
 		"my", "your",
 		"i'm", "you are"
-	];
-
-	this.elizaSynons = {
+	],
+	synons: {
 		"be": ["am", "is", "are", "was"],
 		"belief": ["feel", "think", "believe", "wish"],
 		"cannot": ["can't"],
@@ -648,59 +619,35 @@ function ElizaBot(noRandomFlag) {
 		"family": ["mother", "mom", "father", "dad", "sister", "brother", "wife", "children", "child", "uncle", "aunt", "child"],
 		"happy": ["elated", "glad", "better"],
 		"sad": ["unhappy", "depressed", "sick"]
-	};
-
-	this.noRandom= (noRandomFlag)? true:false;
-	this.capitalizeFirstLetter=true;
-	this.debug=false;
-	this.memSize=20;
-	this.version="1.1 (original)";
-
-	this._dataParsed = false;
-	if (!this._dataParsed) {
-		this._init();
-		this._dataParsed = true;
-	}
-	this.reset();
-}
-
-ElizaBot.prototype.reset = function() {
-	this.quit=false;
-	this.mem=[];
-	this.lastchoice=[];
-
-	for (var k=0; k<this.elizaKeywords.length; k++) {
-		this.lastchoice[k]=[];
-		var rules=this.elizaKeywords[k][2];
-		for (var i=0; i<rules.length; i++) this.lastchoice[k][i]=-1;
 	}
 }
 
-ElizaBot.prototype._init = function() {
-	// install ref to global object
-	var global=this;
-	// parse data and convert it from canonical form to internal use
-	// prodoce synonym list
-	var synPatterns={};
+//Close eliza by saying one of these
+const elizaQuits = [
+	"bye",
+	"goodbye",
+	"done",
+	"exit",
+	"quit"
+];
 
-	if ((this.elizaSynons) && (typeof this.elizaSynons == 'object')) {
-		for (var i in this.elizaSynons) synPatterns[i]='('+i+'|'+this.elizaSynons[i].join('|')+')';
-	}
-	// check for keywords or install empty structure to prevent any errors
-	if ((!this.elizaKeywords) || (typeof this.elizaKeywords.length == 'undefined')) {
-		this.elizaKeywords=[['###',0,[['###',[]]]]];
-	}
-	// 1st convert rules to regexps
-	// expand synonyms and insert asterisk expressions for backtracking
+// parse data and convert it from canonical form to internal use
+// prodoce synonym list
+var synPatterns={};
+
+if ((wordNuances.synons) && (typeof wordNuances.synons == 'object')) {
+	for (var i in wordNuances.synons) synPatterns[i]='('+i+'|'+wordNuances.synons[i].join('|')+')';
+}
+
+function initializeKeywordRegex(keywordList){
 	var sre=/@(\S+)/;
 	var are=/(\S)\s*\*\s*(\S)/;
 	var are1=/^\s*\*\s*(\S)/;
 	var are2=/(\S)\s*\*\s*$/;
 	var are3=/^\s*\*\s*$/;
 	var wsre=/\s+/g;
-	for (var k=0; k<this.elizaKeywords.length; k++) {
-		var rules=this.elizaKeywords[k][2];
-		this.elizaKeywords[k][3]=k; // save original index for sorting
+	for (var k=0; k<keywordList.length; k++) {
+		var rules=keywordList[k][2];
 		for (var i=0; i<rules.length; i++) {
 			var r=rules[i];
 			// check mem flag and store it as decomp's element 2
@@ -758,17 +705,84 @@ ElizaBot.prototype._init = function() {
 			wsre.lastIndex=0;
 		}
 	}
+}
+
+initializeKeywordRegex(responses.keywords);
+
+function ElizaBot(customKeywords = [], noRandomFlag) {
+	this.noRandom=noRandomFlag;
+	this.capitalizeFirstLetter=true;
+	this.debug=false;
+	this.memSize=20;
+	this.keywords=[...responses.keywords, ...customKeywords]; //Add extra things to this specific bot before launching it.
+	this.keyIndexMap = {};
+	this.version="1.3 (modded for es6)";
+
+	this._dataParsed = false;
+	if (!this._dataParsed) {
+		this._init();
+		this._dataParsed = true;
+	}
+	this.reset();
+}
+
+ElizaBot.prototype.reply = function (r) {
+	return this.transform(r);
+}
+
+ElizaBot.prototype.start = function () {
+	return this.getInitial();
+}
+
+ElizaBot.prototype.bye = function () {
+	return this.getFinal();
+}
+
+ElizaBot.prototype.reset = function() {
+	this.quit=false;
+	this.mem=[];
+	this.lastchoice=[];
+
+	for (var k=0; k<this.keywords.length; k++) {
+		this.lastchoice[k]=[];
+		var rules=this.keywords[k][2];
+		for (var i=0; i<rules.length; i++) this.lastchoice[k][i]=-1;
+	}
+}
+
+ElizaBot.prototype._init = function() {
+	// check for keywords or install empty structure to prevent any errors
+	// if ((!this.keywords) || (typeof this.keywords.length == 'undefined')) {
+	// 	this.keywords=[['###',0,[['###',[]]]]];
+	// }
+	// 1st convert rules to regexps
+	// expand synonyms and insert asterisk expressions for backtracking
+	
+	//The original implementation had the keywords sorted out right here, but to keep the legacy fallback
+	//we can emulate the sorting by storing indexes and ranks here, and then applying the ultimate result after.
+	var rankIndexStore = [];
+	for(var i in this.keywords)
+		rankIndexStore.push([i,this.keywords[i][1]]);
+
 	// now sort keywords by rank (highest first)
-	this.elizaKeywords.sort(this._sortKeywords);
+	rankIndexStore.sort(this._sortKeywords);
+	//Apply new indexing to this.keywords
+	this.tempKeywords = [];
+	for(var i of rankIndexStore)
+		this.tempKeywords[i[0]] = this.keywords[i[0]];
+
+	//Lastly, replace this.keywords with the temp
+	this.keywords = this.tempKeywords;
+
 	// and compose regexps and refs for pres and posts
 	ElizaBot.prototype.pres={};
 	ElizaBot.prototype.posts={};
 
-	if ((this.elizaPres) && (this.elizaPres.length)) {
+	if ((wordNuances.pres) && (wordNuances.pres.length)) {
 		var a=new Array();
-		for (var i=0; i<this.elizaPres.length; i+=2) {
-			a.push(this.elizaPres[i]);
-			ElizaBot.prototype.pres[this.elizaPres[i]]=this.elizaPres[i+1];
+		for (var i=0; i<wordNuances.pres.length; i+=2) {
+			a.push(wordNuances.pres[i]);
+			ElizaBot.prototype.pres[wordNuances.pres[i]]=wordNuances.pres[i+1];
 		}
 		ElizaBot.prototype.preExp = new RegExp('\\b('+a.join('|')+')\\b');
 	}
@@ -778,11 +792,11 @@ ElizaBot.prototype._init = function() {
 		ElizaBot.prototype.pres['####']='####';
 	}
 
-	if ((this.elizaPosts) && (this.elizaPosts.length)) {
+	if ((wordNuances.posts) && (wordNuances.posts.length)) {
 		var a=new Array();
-		for (var i=0; i<this.elizaPosts.length; i+=2) {
-			a.push(this.elizaPosts[i]);
-			ElizaBot.prototype.posts[this.elizaPosts[i]]=this.elizaPosts[i+1];
+		for (var i=0; i<wordNuances.posts.length; i+=2) {
+			a.push(wordNuances.posts[i]);
+			ElizaBot.prototype.posts[wordNuances.posts[i]]=wordNuances.posts[i+1];
 		}
 		ElizaBot.prototype.postExp = new RegExp('\\b('+a.join('|')+')\\b');
 	}
@@ -792,8 +806,8 @@ ElizaBot.prototype._init = function() {
 		ElizaBot.prototype.posts['####']='####';
 	}
 	// check for elizaQuits and install default if missing
-	if ((!this.elizaQuits) || (typeof this.elizaQuits.length == 'undefined')) {
-		this.elizaQuits=[];
+	if ((!elizaQuits) || (typeof elizaQuits.length == 'undefined')) {
+		elizaQuits=[];
 	}
 	// done
 	ElizaBot.prototype._dataParsed=true;
@@ -804,8 +818,8 @@ ElizaBot.prototype._sortKeywords = function(a,b) {
 	if (a[1]>b[1]) return -1
 	else if (a[1]<b[1]) return 1
 	// or original index
-	else if (a[3]>b[3]) return 1
-	else if (a[3]<b[3]) return -1
+	else if (a[0]>b[0]) return 1
+	else if (a[0]<b[0]) return -1
 	else return 0;
 }
 
@@ -813,23 +827,21 @@ ElizaBot.prototype.transform = function(text) {
 	var rpl='';
 	this.quit=false;
 	// unify text string
-	text=text.toLowerCase();
-	text=text.replace(/@#\$%\^&\*\(\)_\+=~`\{\[\}\]\|:;<>\/\\\t/g, ' ');
-	text=text.replace(/\s+-+\s+/g, '.');
-	text=text.replace(/\s*[,\.\?!;]+\s*/g, '.');
-	text=text.replace(/\s*\bbut\b\s*/g, '.');
-	text=text.replace(/\s{2,}/g, ' ');
+	text=text.toLowerCase()
+	.replace(/@#\$%\^&\*\(\)_\+=~`\{\[\}\]\|:;<>\/\\\t/g, ' ')
+	.replace(/\s+-+\s+/g, '.')
+	.replace(/\s*[,\.\?!;]+\s*/g, '.')
+	.replace(/\s*\bbut\b\s*/g, '.')
+	.replace(/\s{2,}/g, ' ');
 	// split text in part sentences and loop through them
 	var parts=text.split('.');
 	for (var i=0; i<parts.length; i++) {
 		var part=parts[i];
 		if (part!='') {
 			// check for quit expression
-			for (var q=0; q<this.elizaQuits.length; q++) {
-				if (this.elizaQuits[q]==part) {
-					this.quit=true;
-					return this.getFinal();
-				}
+			if(elizaQuits.indexOf(part) > -1){
+				this.quit=true;
+				return this.getFinal();
 			}
 			// preprocess (v.1.1: work around lambda function)
 			var m=this.preExp.exec(part);
@@ -845,8 +857,8 @@ ElizaBot.prototype.transform = function(text) {
 			}
 			this.sentence=part;
 			// loop trough keywords
-			for (var k=0; k<this.elizaKeywords.length; k++) {
-				if (part.search(new RegExp('\\b'+this.elizaKeywords[k][0]+'\\b', 'i'))>=0) {
+			for (var k=0; k<this.keywords.length; k++) {
+				if (part.search(new RegExp('\\b'+this.keywords[k][0]+'\\b', 'i'))>=0) {
 					rpl = this._execRule(k);
 				}
 				if (rpl!='') return rpl;
@@ -866,7 +878,7 @@ ElizaBot.prototype.transform = function(text) {
 }
 
 ElizaBot.prototype._execRule = function(k) {
-	var rule=this.elizaKeywords[k];
+	var rule=this.keywords[k];
 	var decomps=rule[2];
 	var paramre=/\(([0-9]+)\)/;
 	for (var i=0; i<decomps.length; i++) {
@@ -886,8 +898,8 @@ ElizaBot.prototype._execRule = function(k) {
 				this.lastchoice[k][i]=ri;
 			}
 			var rpl=reasmbs[ri];
-			if (this.debug) alert('match:\nkey: '+this.elizaKeywords[k][0]+
-				'\nrank: '+this.elizaKeywords[k][1]+
+			if (this.debug) console.warn('match:\nkey: '+this.keywords[k][0]+
+				'\nrank: '+this.keywords[k][1]+
 				'\ndecomp: '+decomps[i][0]+
 				'\nreasmb: '+rpl+
 				'\nmemflag: '+memflag);
@@ -932,10 +944,10 @@ ElizaBot.prototype._postTransform = function(s) {
 	// final cleanings
 	s=s.replace(/\s{2,}/g, ' ');
 	s=s.replace(/\s+\./g, '.');
-	if ((this.elizaPostTransforms) && (this.elizaPostTransforms.length)) {
-		for (var i=0; i<this.elizaPostTransforms.length; i+=2) {
-			s=s.replace(this.elizaPostTransforms[i], this.elizaPostTransforms[i+1]);
-			this.elizaPostTransforms[i].lastIndex=0;
+	if ((responses.postTransforms) && (responses.postTransforms.length)) {
+		for (var i=0; i<responses.postTransforms.length; i+=2) {
+			s=s.replace(responses.postTransforms[i], responses.postTransforms[i+1]);
+			responses.postTransforms[i].lastIndex=0;
 		}
 	}
 	// capitalize first char (v.1.1: work around lambda function)
@@ -948,8 +960,8 @@ ElizaBot.prototype._postTransform = function(s) {
 }
 
 ElizaBot.prototype._getRuleIndexByKey = function(key) {
-	for (var k=0; k<this.elizaKeywords.length; k++) {
-		if (this.elizaKeywords[k][0]==key) return k;
+	for (var k=0; k<this.keywords.length; k++) {
+		if (this.keywords[k][0]==key) return k;
 	}
 	return -1;
 }
@@ -973,39 +985,8 @@ ElizaBot.prototype._memGet = function() {
 	else return '';
 }
 
-ElizaBot.prototype.getFinal = function() {
+ElizaBot.prototype.getFinal = ()=>responses.finals[Math.floor(Math.random()*responses.finals.length)];
+ElizaBot.prototype.getInitial = ()=>responses.initials[Math.floor(Math.random()*responses.initials.length)];
 
-	if (!this.elizaFinals) return '';
-	return this.elizaFinals[Math.floor(Math.random()*this.elizaFinals.length)];
-}
-
-ElizaBot.prototype.getInitial = function() {
-	if (!this.elizaInitials) return '';
-	return this.elizaInitials[Math.floor(Math.random()*this.elizaInitials.length)];
-}
-
-var elizaFinals = [
-"Goodbye.  It was nice talking to you.",
-// additions (not original)
-"Goodbye.  This was really a nice talk.",
-"Goodbye.  I'm looking forward to our next session.",
-"This was a good session, wasn't it -- but time is over now.   Goodbye.",
-"Maybe we could discuss this moreover in our next session ?   Goodbye."
-];
-
-
-// fix array.prototype methods (push, shift) if not implemented (MSIE fix)
-if (typeof Array.prototype.push == 'undefined') {
-	Array.prototype.push=function(v) { return this[this.length]=v; };
-}
-if (typeof Array.prototype.shift == 'undefined') {
-	Array.prototype.shift=function() {
-		if (this.length==0) return null;
-		var e0=this[0];
-		for (var i=1; i<this.length; i++) this[i-1]=this[i];
-		this.length--;
-		return e0;
-	};
-}
-
+module.exports = {initializeWords:initializeKeywordRegex, bot:ElizaBot};
 // eof

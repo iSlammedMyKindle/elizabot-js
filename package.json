@@ -1,0 +1,19 @@
+{
+  "name": "elizabot",
+  "version": "1.0.0",
+  "description": "elizabot-js ===========",
+  "main": "elizabot.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iSlammedMyKindle/elizabot-js.git"
+  },
+  "author": "iSlammedMyKindle",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/iSlammedMyKindle/elizabot-js/issues"
+  },
+  "homepage": "https://github.com/iSlammedMyKindle/elizabot-js#readme"
+}
